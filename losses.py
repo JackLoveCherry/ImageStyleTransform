@@ -17,12 +17,13 @@ def gram(layer):
     num_filters = shape[3]
     filters = tf.reshape(layer, tf.stack([num_images, -1, num_filters]))
     grams = tf.matmul(filters, filters, transpose_a=True) / tf.to_float(width * height * num_filters)
+
     return grams
 
 
 def get_style_features(FLAGS):
     """
-    对于风格图片,预处理步骤:
+    For the "style_image", the preprocessing step is:
     1. Resize the shorter side to FLAGS.image_size
     2. Apply central crop
     """
@@ -35,6 +36,7 @@ def get_style_features(FLAGS):
             FLAGS.loss_model,
             is_training=False)
 
+        # Get the style image data
         size = FLAGS.image_size
         img_bytes = tf.read_file(FLAGS.style_image)
         if FLAGS.style_image.lower().endswith('png'):
@@ -42,7 +44,11 @@ def get_style_features(FLAGS):
         else:
             image = tf.image.decode_jpeg(img_bytes)
         # image = _aspect_preserving_resize(image, size)
-        images = tf.stack([image_preprocessing_fn(image, size, size)])
+
+        # Add the batch dimension
+        images = tf.expand_dims(image_preprocessing_fn(image, size, size), 0)
+        # images = tf.stack([image_preprocessing_fn(image, size, size)])
+
         _, endpoints_dict = network_fn(images, spatial_squeeze=False)
         features = []
         for layer in FLAGS.style_layers:
@@ -51,16 +57,23 @@ def get_style_features(FLAGS):
             features.append(feature)
 
         with tf.Session() as sess:
+            # Restore variables for loss network.
             init_func = utils._get_init_fn(FLAGS)
             init_func(sess)
-            if os.path.exists('static/img/generated') is False:
-                os.makedirs('static/img/generated')
-            save_file = 'static/img/generated/target_style_' + FLAGS.naming + '.jpg'
+
+            # Make sure the 'generated' directory is exists.
+            if os.path.exists('generated') is False:
+                os.makedirs('generated')
+            # Indicate cropped style image path
+            save_file = 'generated/target_style_' + FLAGS.naming + '.jpg'
+            # Write preprocessed style image to indicated path
             with open(save_file, 'wb') as f:
                 target_image = image_unprocessing_fn(images[0, :])
                 value = tf.image.encode_jpeg(tf.cast(target_image, tf.uint8))
                 f.write(sess.run(value))
                 tf.logging.info('Target style pattern is saved to: %s.' % save_file)
+
+            # Return the features those layers are use for measuring style loss.
             return sess.run(features)
 
 

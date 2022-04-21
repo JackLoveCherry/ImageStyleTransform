@@ -23,6 +23,7 @@ def _get_init_fn(FLAGS):
         exclusions = [scope.strip()
                       for scope in FLAGS.checkpoint_exclude_scopes.split(',')]
 
+    # TODO(sguada) variables.filter_variables()
     variables_to_restore = []
     for var in slim.get_model_variables():
         excluded = False
@@ -48,6 +49,16 @@ def read_conf_file(conf_file):
     with open(conf_file) as f:
         FLAGS = Flag(**yaml.load(f))
     return FLAGS
+
+
+def mean_image_subtraction(image, means):
+    image = tf.to_float(image)
+
+    num_channels = 3
+    channels = tf.split(image, num_channels, 2)
+    for i in range(num_channels):
+        channels[i] -= means[i]
+    return tf.concat(channels, 2)
 
 
 if __name__ == '__main__':
